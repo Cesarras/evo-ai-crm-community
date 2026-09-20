@@ -387,32 +387,73 @@ class AgentBotListener < BaseListener
   end
 
   # Get the appropriate agent bot for a message
+  #
+  # Agent-per-stage routing (Solumatik fork):
+  #   The agent is resolved from the conversation's current pipeline stage,
+  #   not from the inbox's agent_bot_inbox. If the stage has a required_label,
+  #   the conversation must have that label or the bot silences (returns nil).
+  #   Falls back to inbox agent_bot only when the stage has no agent_bot
+  #   configured AND the inbox has one (legacy behaviour).
+  #
   # For Facebook post conversations, use the configured comment agent bot if available
   # Note: All filters (interaction type, comment replies enabled, post allowed, status/labels)
   # are already checked in message_created/message_updated before calling this method
   def get_agent_bot_for_message(inbox, message)
-    agent_bot_inbox = inbox.agent_bot_inbox
-    return inbox.agent_bot if agent_bot_inbox.blank?
-
     conversation = message.conversation
 
-    # For Facebook post conversations, use comment-specific bot if configured
+    # Stage-based agent routing
+    stage_agent_bot = resolve_stage_agent_bot(conversation)
+    return stage_agent_bot if stage_agent_bot
+
+    # Facebook post conversations: use comment-specific bot if configured
     if conversation.post_conversation? && inbox.facebook?
+      agent_bot_inbox = inbox.agent_bot_inbox
       Rails.logger.info "[AgentBot Listener] Facebook post conversation - selecting agent bot"
-      Rails.logger.info "[AgentBot Listener] Comment replies enabled: #{agent_bot_inbox.facebook_comment_replies_enabled?}"
-      Rails.logger.info "[AgentBot Listener] Comment-specific bot ID: #{agent_bot_inbox.facebook_comment_agent_bot_id}"
 
-      # Use specific comment agent bot if configured, otherwise use main agent bot
-      comment_agent_bot = agent_bot_inbox.facebook_comment_agent_bot || agent_bot_inbox.agent_bot
-      Rails.logger.info "[AgentBot Listener] Using agent bot: #{comment_agent_bot&.name} (ID: #{comment_agent_bot&.id})"
-      Rails.logger.info "[AgentBot Listener] Is comment-specific bot: #{agent_bot_inbox.facebook_comment_agent_bot.present?}"
-
+      comment_agent_bot = agent_bot_inbox&.facebook_comment_agent_bot || agent_bot_inbox&.agent_bot
+      Rails.logger.info "[AgentBot Listener] Using fallback agent bot: #{comment_agent_bot&.name} (ID: #{comment_agent_bot&.id})"
       return comment_agent_bot
     end
 
-    # For regular conversations (including Facebook Messenger direct messages), use main agent bot
-    Rails.logger.info "[AgentBot Listener] Regular conversation, using main agent bot: #{agent_bot_inbox.agent_bot&.name}"
-    agent_bot_inbox.agent_bot
+    # Legacy fallback: inbox agent_bot
+    agent_bot_inbox = inbox.agent_bot_inbox
+    agent_bot_inbox&.agent_bot
+  end
+
+  # Resolve the agent bot from the conversation's current pipeline stage.
+  # Returns nil if:
+  #   - conversation has no pipeline_item / stage
+  #   - stage has no agent_bot
+  #   - stage has a required_label and the conversation doesn't have it
+  def resolve_stage_agent_bot(conversation)
+    pipeline_item = conversation.pipeline_items.first
+    return nil unless pipeline_item
+
+    stage = pipeline_item.pipeline_stage
+    return nil unless stage
+    return nil unless stage.agent_bot
+
+    # If the stage has a required_label, the conversation must have it
+    if stage.required_label_id.present?
+      required_label = stage.required_label
+      unless conversation_has_label?(conversation, required_label)
+        Rails.logger.info "[AgentBot Listener] Stage #{stage.name} requires label '#{required_label.title}' but conversation #{conversation.id} doesn't have it — silencing"
+        return nil
+      end
+    end
+
+    Rails.logger.info "[AgentBot Listener] Stage-based routing: stage='#{stage.name}' agent_bot='#{stage.agent_bot.name}' (ID: #{stage.agent_bot.id})"
+    stage.agent_bot
+  end
+
+  # Check if a conversation has a specific CRM Label.
+  # Conversations use acts_as_taggable_on with label_list (array of tag names).
+  # Tag names can be Label UUIDs or Label titles — we check both.
+  def conversation_has_label?(conversation, label)
+    tag_names = conversation.label_list || []
+    tag_names.any? do |name|
+      name == label.id.to_s || name == label.title
+    end
   end
 
   def process_message_event(method_name, agent_bot, message, _event)

@@ -25,6 +25,7 @@ class AgentBot < ApplicationRecord
 
   has_many :agent_bot_inboxes, dependent: :destroy_async
   has_many :inboxes, through: :agent_bot_inboxes
+  has_many :pipeline_stages, dependent: :nullify
   has_many :messages, as: :sender, dependent: :nullify
 
   before_destroy :cleanup_associations

@@ -325,6 +325,8 @@ class Api::V1::PipelineStagesController < Api::V1::BaseController
       :name,
       :color,
       :stage_type,
+      :agent_bot_id,
+      :required_label_id,
       custom_fields: {}
     )
 

@@ -21,6 +21,8 @@
 #
 class PipelineStage < ApplicationRecord
   belongs_to :pipeline
+  belongs_to :agent_bot, optional: true
+  belongs_to :required_label, class_name: 'Label', optional: true, foreign_key: :required_label_id
   has_many :pipeline_items, dependent: :destroy
   has_many :conversations, through: :pipeline_items
   has_many :stage_movements_from, class_name: 'StageMovement', foreign_key: 'from_stage_id', dependent: :destroy, inverse_of: :from_stage
