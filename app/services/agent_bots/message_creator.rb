@@ -47,11 +47,13 @@ class AgentBots::MessageCreator
   end
 
   def conversation_eligible_for_bot_reply?(conversation)
-    # Find the AgentBotInbox configuration for this conversation's inbox
-    agent_bot_inbox = AgentBotInbox.find_by(agent_bot: @agent_bot, inbox: conversation.inbox)
+    # Find the AgentBotInbox configuration for this conversation's inbox.
+    # Stage-aware: the agent_bot_inbox may have no agent_bot_id (stage-routed),
+    # so we look up by inbox only, matching the AgentBotListener pattern.
+    agent_bot_inbox = conversation.inbox.agent_bot_inbox
 
     unless agent_bot_inbox
-      Rails.logger.warn "[AgentBot HTTP] No AgentBotInbox found for agent_bot #{@agent_bot.id} and inbox #{conversation.inbox.id}"
+      Rails.logger.warn "[AgentBot HTTP] No AgentBotInbox found for inbox #{conversation.inbox.id}"
       # Fallback to legacy behavior: only pending conversations
       is_pending = conversation.status == 'pending'
       Rails.logger.debug { "[AgentBot HTTP] Conversation status check (legacy): #{conversation.status} -> eligible: #{is_pending}" }

@@ -58,15 +58,13 @@ class Webhooks::BotRuntimeController < ActionController::API
 
   VALID_MEDIA_FILE_TYPES = %w[image audio video file].freeze
 
-  # Returns [{ url:, file_type: }] from the structured payload (bot_runtime) or,
-  # as a fallback, extracted from the text content (MediaUrlExtractor).
   def resolve_media(content)
     if params[:attachments].present?
       Array(params[:attachments]).filter_map do |att|
         url = att[:url].to_s
         file_type = att[:file_type].to_s
         next if url.blank?
-        next unless VALID_MEDIA_FILE_TYPES.include?(file_type) # F6: drop invalid file_type
+        next unless VALID_MEDIA_FILE_TYPES.include?(file_type)
 
         { url: url, file_type: file_type }
       end
@@ -75,16 +73,12 @@ class Webhooks::BotRuntimeController < ActionController::API
     end
   end
 
-  # When media came from text extraction, remove those URLs from the text so the
-  # link is not duplicated as plain text alongside the rendered media.
   def strip_media_urls(content, media)
     AgentBots::MediaUrlExtractor.call(content)[:text]
   end
 
   def validate_secret
     expected_secret = BotRuntime::Config.secret
-
-    # Skip validation when no secret is configured (development/testing)
     return if expected_secret.blank?
 
     provided_secret = request.headers['X-Bot-Runtime-Secret']
@@ -93,11 +87,46 @@ class Webhooks::BotRuntimeController < ActionController::API
     render json: { error: 'Unauthorized' }, status: :unauthorized
   end
 
+  # Stage-aware agent bot resolution (mirrors AgentBotListener#resolve_stage_agent_bot).
+  # Falls back to inbox agent_bot when the stage has no agent_bot configured.
   def find_active_agent_bot(conversation)
     inbox = conversation.inbox
     agent_bot_inbox = inbox.agent_bot_inbox
     return nil unless agent_bot_inbox&.active?
 
+    # Try stage-based routing first
+    stage_bot = resolve_stage_agent_bot(conversation)
+    return stage_bot if stage_bot
+
+    # Legacy fallback: inbox agent_bot
     agent_bot_inbox.agent_bot
+  end
+
+  def resolve_stage_agent_bot(conversation)
+    pipeline_item = conversation.pipeline_items.first
+    return nil unless pipeline_item
+
+    stage = pipeline_item.pipeline_stage
+    return nil unless stage
+    return nil unless stage.agent_bot
+
+    # If the stage has a required_label, the conversation must have it
+    if stage.required_label_id.present?
+      required_label = stage.required_label
+      unless conversation_has_label?(conversation, required_label)
+        Rails.logger.info "[BotRuntime::Postback] Stage #{stage.name} requires label '#{required_label.title}' but conversation #{conversation.id} doesn't have it — silencing"
+        return nil
+      end
+    end
+
+    Rails.logger.info "[BotRuntime::Postback] Stage-based routing: stage='#{stage.name}' agent_bot='#{stage.agent_bot.name}' (ID: #{stage.agent_bot.id})"
+    stage.agent_bot
+  end
+
+  def conversation_has_label?(conversation, label)
+    tag_names = conversation.label_list || []
+    tag_names.any? do |name|
+      name == label.id.to_s || name == label.title
+    end
   end
 end
