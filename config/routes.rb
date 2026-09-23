@@ -611,6 +611,7 @@ Rails.application.routes.draw do
           member do
             patch :move_to_stage
             patch :update_custom_fields
+            get :get_custom_fields
             patch :update_conversation
           end
           collection do

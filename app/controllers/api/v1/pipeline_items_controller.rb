@@ -23,7 +23,7 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   EvoPermissionConcern.register_permission_key('pipeline_items.update')
 
   before_action :set_pipeline
-  before_action :set_pipeline_item, only: [:update, :destroy, :move_to_stage, :update_conversation, :update_custom_fields]
+  before_action :set_pipeline_item, only: [:update, :destroy, :move_to_stage, :update_conversation, :update_custom_fields, :get_custom_fields]
   before_action :ensure_authorized_user
   # Last in the chain: a caller without write permission must get 403, not a
   # business-rule 422 telling it the pipeline is archived.
@@ -402,6 +402,13 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
     )
   end
 
+  def get_custom_fields
+    success_response(
+      data: { custom_fields: @pipeline_item.custom_fields },
+      message: 'Custom fields retrieved successfully'
+    )
+  end
+
   # rubocop:disable Metrics/MethodLength
   def bulk_move
     conversation_ids = params[:conversation_ids] || []
@@ -631,14 +638,15 @@ class Api::V1::PipelineItemsController < Api::V1::BaseController
   # rubocop:disable Metrics/AbcSize
   def set_pipeline_item
     # For destroy and move_to_stage actions, try to find by conversation_id first, then by pipeline_item id
-    if %w[destroy move_to_stage update_conversation].include?(action_name)
-      # First try to find by conversation display_id
-      conversation = Conversation.find_by(display_id: params[:id])
+    if %w[destroy move_to_stage update_conversation update_custom_fields get_custom_fields].include?(action_name)
+      # Try to find by conversation id (UUID) first — avoids PostgreSQL casting
+      # a UUID string to integer when matching against display_id.
+      conversation = Conversation.find_by(id: params[:id])
       @pipeline_item = @pipeline.pipeline_items.find_by(conversation: conversation) if conversation
 
-      # If not found, try by conversation id (UUID)
-      if @pipeline_item.nil?
-        conversation = Conversation.find_by(id: params[:id])
+      # If not found, try by conversation display_id (integer)
+      if @pipeline_item.nil? && params[:id].to_s.match?(/^\d+$/)
+        conversation = Conversation.find_by(display_id: params[:id])
         @pipeline_item = @pipeline.pipeline_items.find_by(conversation: conversation) if conversation
       end
 
