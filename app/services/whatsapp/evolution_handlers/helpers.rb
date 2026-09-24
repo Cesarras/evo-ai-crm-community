@@ -61,6 +61,8 @@ module Whatsapp::EvolutionHandlers::Helpers
     when 'file'
       @raw_message.dig(:message, :documentMessage, :caption) ||
         @raw_message.dig(:message, :documentWithCaptionMessage, :message, :documentMessage, :caption)
+    when 'audio'
+      @raw_message.dig(:message, :speechToText)
     when 'reaction'
       @raw_message.dig(:message, :reactionMessage, :text)
     when 'location'

@@ -1,5 +1,31 @@
 # frozen_string_literal: true
 
+# == Schema Information
+#
+# Table name: evo_core_integration_credentials
+#
+#  id            :uuid             not null, primary key
+#  imported_from :string(128)
+#  is_active     :boolean          default(TRUE), not null
+#  kind          :string(16)       default("static"), not null
+#  name          :string(255)      not null
+#  owner_ref     :string(128)
+#  owner_store   :string(64)
+#  provider      :string(100)      not null
+#  scope         :string(32)       default("account"), not null
+#  value         :text
+#  value_format  :string(16)       default("scalar"), not null
+#  value_hint    :string(8)        default(""), not null
+#  created_at    :datetime         not null
+#  updated_at    :datetime         not null
+#
+# Indexes
+#
+#  evo_core_integration_credentials_scope_name_unique  (scope,name) UNIQUE
+#  idx_evo_core_integration_credentials_kind_provider  (kind,provider)
+#  idx_evo_core_integration_credentials_owner_unique   (owner_store,owner_ref) UNIQUE WHERE ((owner_store IS NOT NULL) AND (owner_ref IS NOT NULL))
+#  idx_evo_core_integration_credentials_scope_active   (scope,is_active)
+#
 # Read-only view over `evo_core_integration_credentials`, the integration
 # credential vault. Same arrangement as Ai::Credential: the core owns the table
 # and every write, and the CRM reads it directly because the resolver runs in

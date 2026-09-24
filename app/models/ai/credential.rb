@@ -1,5 +1,29 @@
 # frozen_string_literal: true
 
+# == Schema Information
+#
+# Table name: evo_core_api_keys
+#
+#  id            :uuid             not null, primary key
+#  base_url      :string(512)
+#  imported_from :string(64)
+#  is_active     :boolean          default(TRUE)
+#  key           :text             not null
+#  key_hint      :string(8)        default(""), not null
+#  name          :string(255)      not null
+#  provider      :string(255)      not null
+#  scope         :string(32)       default("account"), not null
+#  created_at    :timestamptz
+#  updated_at    :timestamptz
+#
+# Indexes
+#
+#  idx_evo_core_api_keys_imported_from  (imported_from) UNIQUE WHERE (imported_from IS NOT NULL)
+#  idx_evo_core_api_keys_is_active      (is_active)
+#  idx_evo_core_api_keys_name           (name)
+#  idx_evo_core_api_keys_name_unique    (name) UNIQUE
+#  idx_evo_core_api_keys_scope_active   (scope,is_active)
+#
 # Read-only view over `evo_core_api_keys`, the AI credential registry.
 #
 # evo-ai-core-service owns the table and every write; the CRM reads it directly

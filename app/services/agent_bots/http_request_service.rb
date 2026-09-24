@@ -230,7 +230,18 @@ class AgentBots::HttpRequestService
   end
 
   def build_pipeline_data(contact)
-    contact.pipeline_items.includes(:pipeline, :pipeline_stage, :tasks).map do |item|
+    # Collect pipeline_items from both contact and conversation.
+    # PipelineItem can be linked via contact_id OR conversation_id (mutually exclusive).
+    # If we only check contact.pipeline_items, we miss items created via Conversation.
+    items = contact.pipeline_items.includes(:pipeline, :pipeline_stage, :tasks).to_a
+
+    conversation = find_conversation_from_payload
+    if conversation
+      conv_items = conversation.pipeline_items.includes(:pipeline, :pipeline_stage, :tasks).to_a
+      items = (items + conv_items).uniq(&:id)
+    end
+
+    items.map do |item|
       {
         id: item.id.to_s,
         pipeline_id: item.pipeline_id.to_s,

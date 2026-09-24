@@ -2,22 +2,31 @@
 #
 # Table name: pipeline_stages
 #
-#  id               :uuid             not null, primary key
-#  automation_rules :jsonb
-#  color            :string           default("#3B82F6")
-#  custom_fields    :jsonb            not null
-#  name             :string           not null
-#  position         :integer          not null
-#  stage_type       :integer          default(0)
-#  created_at       :datetime         not null
-#  updated_at       :datetime         not null
-#  pipeline_id      :uuid             not null
+#  id                :uuid             not null, primary key
+#  automation_rules  :jsonb
+#  color             :string           default("#3B82F6")
+#  custom_fields     :jsonb            not null
+#  name              :string           not null
+#  position          :integer          not null
+#  stage_type        :integer          default("active")
+#  created_at        :datetime         not null
+#  updated_at        :datetime         not null
+#  agent_bot_id      :uuid
+#  pipeline_id       :uuid             not null
+#  required_label_id :uuid
 #
 # Indexes
 #
+#  index_pipeline_stages_on_agent_bot_id              (agent_bot_id)
 #  index_pipeline_stages_on_custom_fields             (custom_fields) USING gin
 #  index_pipeline_stages_on_pipeline_id               (pipeline_id)
 #  index_pipeline_stages_on_pipeline_id_and_position  (pipeline_id,position) UNIQUE
+#  index_pipeline_stages_on_required_label_id         (required_label_id)
+#
+# Foreign Keys
+#
+#  fk_rails_...  (agent_bot_id => agent_bots.id)
+#  fk_rails_...  (required_label_id => labels.id)
 #
 class PipelineStage < ApplicationRecord
   belongs_to :pipeline
